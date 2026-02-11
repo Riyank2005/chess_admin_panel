@@ -12,7 +12,12 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "server": "nodemon backend/server.js",
+    "start": "node backend/server.js",
     "seed": "node backend/force-seed.js"
+  },
+  "overrides": {
+    "react": "$react",
+    "react-dom": "$react-dom"
   },
   "dependencies": {
     "@clerk/clerk-react": "^5.60.0",
@@ -72,7 +77,7 @@
     "lucide-react": "^0.462.0",
     "mongoose": "^9.1.5",
     "morgan": "^1.10.1",
-    "next-themes": "^0.3.0",
+    "next-themes": "^0.4.6",
     "node-schedule": "^2.1.1",
     "nodemailer": "^7.0.13",
     "os-utils": "^0.0.14",
