@@ -1,0 +1,23 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Chess Master Control API",
+    "version": "1.0.0",
+    "description": "Minimal OpenAPI spec for key admin endpoints (notifications, auth, games)"
+  },
+  "paths": {
+    "/api/notifications": {
+      "get": {
+        "summary": "List notifications",
+        "parameters": [
+          {"name":"page","in":"query","schema":{"type":"integer"}},
+          {"name":"limit","in":"query","schema":{"type":"integer"}}
+        ],
+        "responses": {"200":{"description":"A list of notifications"}}
+      }
+    },
+    "/api/notifications/read": {
+      "post": {"summary":"Mark notification as read","responses":{"200":{"description":"Updated"}}}
+    }
+  }
+}

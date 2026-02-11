@@ -1,0 +1,138 @@
+# Technical Architecture & Schema Reference
+
+**Version:** 1.0.0
+**Date:** 2026-02-10
+
+This document serves as the technical source of truth for the Nexus Pro backend architecture, database schema, and key API endpoints.
+
+---
+
+## 1. 📂 Project Structure
+
+```text
+chess-master-control/
+├── backend/
+│   ├── config/         # DB connection & constants
+│   ├── controllers/    # Business logic (Auth, Games, Users)
+│   ├── middleware/     # -+ checks, Error handling, Rate limiting
+│   ├── models/         # Mongoose Schemas (Data Layer)
+│   ├── routes/         # API Endpoint definitions
+│   └── server.js       # Entry point & Socket.io setup
+├── src/
+│   ├── components/     # Reusable UI components (Shadcn)
+│   ├── context/        # React Context (Auth, WebSocket)
+│   ├── pages/          # Admin Views (Dashboard, Users, Games)
+│   └── App.jsx         # Main Router
+└── ...config files
+```
+
+---
+
+## 2. 🗄️ Database Schema (MongoDB/Mongoose)
+
+### A. Core User Models
+
+#### `Admin` (Collection: `admins`)
+Represents system operators with elevated privileges.
+| Field | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `username` | String | Yes | Unique identifier. |
+| `email` | String | Yes | Unique contact email. |
+| `password` | String | Yes | Bcrypt hash. |
+| `clearanceLevel` | Enum | Yes | `SUPER_ADMIN`, `MODERATOR`, `SUPPORT`. |
+| `loginOtp` | String | No | Temporary 6-char OTP for 2FA. |
+| `twoFactorSecret` | String | No | TOTP Secret (if App-based 2FA enabled). |
+
+#### `Player` (Collection: `players`)
+Represents end-users of the chess platform.
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `username` | String | Unique handler. |
+| `email` | String | Contact info. |
+| `rating` | Number | ELO Rating (Default: 1200). |
+| `isBanned` | Boolean | Account status flag. |
+| `country` | String | ISO Country Code (e.g., 'US', 'IN'). |
+| `stats` | Object | `{ wins, losses, draws }`. |
+
+### B. Game & Tournament Models
+
+#### `Game` (Collection: `games`)
+Stores individual chess match data.
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `whitePlayer` | ObjectId | Ref to `Player`. |
+| `blackPlayer` | ObjectId | Ref to `Player`. |
+| `pgn` | String | Portable Game Notation (Moves). |
+| `fen` | String | Current board state. |
+| `status` | Enum | `active`, `completed`, `aborted`, `draw`. |
+| `winner` | ObjectId | Ref to `Player` (or null). |
+| `startTime` | Date | Timestamp. |
+
+#### `Tournament` (Collection: `tournaments`)
+Manages organized competitive events.
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `name` | String | Event Title. |
+| `status` | Enum | `registration`, `active`, `completed`. |
+| `participants` | [ObjectId] | Array of `Player` IDs. |
+| `rounds` | Array | Nested structure for pairings/results. |
+| `startDate` | Date | Scheduled start time. |
+
+### C. System Models
+
+#### `AuditLog` (Collection: `auditlogs`)
+Tracks administrative actions for accountability.
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `adminId` | ObjectId | Who performed the action. |
+| `action` | String | e.g., `BAN_USER`, `FORCE_DRAW`. |
+| `targetId` | String | ID of affected entity (User/Game). |
+| `details` | Object | Metadata/Changeset. |
+| `ipAddress` | String | Origin IP. |
+
+---
+
+## 3. 🔌 Key API Endpoints
+
+### Authentication (`/api/auth`)
+| Method | Endpoint | Description | Auth Required |
+| :--- | :--- | :--- | :--- |
+| POST | `/admin-login` | Initiates Login (Returns `requiresOtp: true`). | No |
+| POST | `/verify` | Verifies OTP & Issues JWT. | No |
+| POST | `/refresh` | Refreshes Access Token. | Yes |
+
+### User Management (`/api/users`)
+| Method | Endpoint | Description | Auth Required |
+| :--- | :--- | :--- | :--- |
+| GET | `/` | List all users (Paginated). | Yes (Admin) |
+| GET | `/:id` | Get user profile & stats. | Yes (Admin) |
+| PUT | `/:id/ban` | Ban/Unban user. | Yes (Admin) |
+| GET | `/active` | Get currently online user count. | Yes (Admin) |
+
+### Game Control (`/api/games`)
+| Method | Endpoint | Description | Auth Required |
+| :--- | :--- | :--- | :--- |
+| GET | `/live` | List currently active games. | Yes (Admin) |
+| POST | `/abort` | Force abort a specific game. | Yes (Admin) |
+| GET | `/:id/pgn` | Download game PGN. | Yes (Admin) |
+
+---
+
+## 4. ⚡ Real-Time Events (Socket.io)
+
+### Namespaces
+*   `/` (Default): Global events.
+*   `/admin`: Restricted channel for dashboard updates.
+
+### Events (Server -> Client)
+*   `game:move`: Broadcasts a move made in a game.
+*   `game:end`: Notifies when a game concludes.
+*   `stats:update`: Pushes updated active user counts (every 5s).
+*   `admin:notification`: System alert for admins.
+
+### Events (Client -> Server)
+*   `join:game`: Request to spectate a specific room.
+*   `admin:command`: Execute a rigorous command (e.g., global mute).
+
+---
+*Generated by Antigravity - Technical Documentation*

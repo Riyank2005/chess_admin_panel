@@ -1,0 +1,29 @@
+/* Game-like theme: neon accents, HUD cards, subtle grid */
+:root {
+  --neon-cyan: rgba(56, 189, 248, 0.1);
+  --neon-indigo: rgba(99, 102, 241, 0.1);
+}
+
+.game-bg {
+  background-image: radial-gradient(circle at 10% 10%, rgba(59, 130, 246, 0.05), transparent 50%);
+  background-attachment: fixed;
+}
+
+.hud-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(8px);
+  border-radius: 0.75rem;
+}
+
+.neon-accent {
+  background: linear-gradient(90deg, #6366f1, #06b6d4);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-weight: 700;
+}
+
+.glow-outline {
+  box-shadow: 0 0 15px rgba(56, 189, 248, 0.1);
+}
