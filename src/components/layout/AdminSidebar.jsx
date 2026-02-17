@@ -8,7 +8,7 @@ import { LegalDialog } from "@/components/legal/LegalDialog";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 const menuItems = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard, cat: "MAIN" },
+  { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard, cat: "MAIN" },
   { title: "Players", url: "/users", icon: Users, cat: "MAIN" },
   { title: "Games", url: "/games", icon: Gamepad2, cat: "MAIN" },
   { title: "Tournaments", url: "/tournaments", icon: Trophy, cat: "MAIN" },

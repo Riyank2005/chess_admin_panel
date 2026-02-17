@@ -2,11 +2,13 @@ import mongoose from 'mongoose';
 
 const gameSchema = mongoose.Schema({
     white: {
-        type: String,
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Player',
         required: true
     },
     black: {
-        type: String,
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Player',
         required: true
     },
     whiteElo: {

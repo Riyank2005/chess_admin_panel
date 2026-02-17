@@ -42,7 +42,7 @@ export const loginAdmin = async (req, res) => {
 // @desc    Register a new admin (Internal Only)
 // @route   POST /api/auth/admin/setup
 export const setupAdmin = async (req, res) => {
-    const { username, email, password, secretKey } = req.body;
+    const { username, email, phone, password, secretKey } = req.body;
 
     // Protection against unauthorized admin creation
     if (secretKey !== process.env.ADMIN_SETUP_KEY && secretKey !== 'NEXUS_INIT_2024') {
@@ -58,6 +58,7 @@ export const setupAdmin = async (req, res) => {
         const admin = await Admin.create({
             username,
             email,
+            phone,
             password,
             clearanceLevel: 'SUPER_ADMIN'
         });

@@ -19,6 +19,7 @@ import taskRoutes from './routes/taskRoutes.js';
 import admin2faRoutes from './routes/admin2faRoutes.js';
 import tournamentRoutes from './routes/tournamentRoutes.js';
 import { loginAdmin } from './controllers/adminAuthController.js';
+import { handleGameSocket } from './socket/gameSocket.js';
 import {
     apiLimiter,
     authLimiter,
@@ -60,6 +61,9 @@ global.activeAdmins = new Set();
 
 io.on('connection', (socket) => {
     console.log(`[SOCKET] ⚡ New connection: ${socket.id}`);
+
+    // Initialize game socket handlers
+    handleGameSocket(io, socket);
 
     socket.on('admin:join', (adminId) => {
         global.activeUsers.set(adminId, socket.id);
@@ -216,6 +220,21 @@ app.use('/api/system', systemRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/api/admin/2fa', admin2faRoutes);
 app.use('/api/tournaments', tournamentRoutes);
+
+// --- Production: Serving Frontend ---
+if (process.env.NODE_ENV === 'production') {
+    const __dirname = path.resolve();
+    app.use(express.static(path.join(__dirname, 'dist')));
+
+    app.get('*', (req, res, next) => {
+        if (!req.path.startsWith('/api')) {
+            res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
+        } else {
+            next();
+        }
+    });
+}
+// ----------------------------------
 
 // 404 Handler
 app.use((req, res) => {

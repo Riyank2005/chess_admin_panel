@@ -38,11 +38,18 @@ export const getGames = async (req, res) => {
         }
 
         // Player filters
+        if (req.query.participant) {
+            query.$or = [
+                { white: req.query.participant },
+                { black: req.query.participant }
+            ];
+        }
+
         if (white) {
-            query.white = { $regex: white, $options: 'i' };
+            query.white = white;
         }
         if (black) {
-            query.black = { $regex: black, $options: 'i' };
+            query.black = black;
         }
 
         // Time control filter
@@ -73,6 +80,7 @@ export const getGames = async (req, res) => {
 
         const [games, total] = await Promise.all([
             Game.find(query)
+                .populate('white black', 'username elo')
                 .sort(sortOptions)
                 .skip(skip)
                 .limit(parseInt(limit)),
@@ -240,12 +248,12 @@ export const bulkGameOperations = async (req, res) => {
             case 'abort':
                 result = await Game.updateMany(
                     { _id: { $in: gameIds } },
-                    { 
-                        $set: { 
+                    {
+                        $set: {
                             status: 'aborted',
                             result: 'Aborted',
                             description: 'Bulk aborted by Admin'
-                        } 
+                        }
                     }
                 );
                 actionType = 'GAME_TERMINATED';
@@ -254,12 +262,12 @@ export const bulkGameOperations = async (req, res) => {
             case 'draw':
                 result = await Game.updateMany(
                     { _id: { $in: gameIds } },
-                    { 
-                        $set: { 
+                    {
+                        $set: {
                             status: 'drawn',
                             result: '1/2-1/2',
                             description: 'Bulk drawn by Admin'
-                        } 
+                        }
                     }
                 );
                 actionType = 'GAME_TERMINATED';

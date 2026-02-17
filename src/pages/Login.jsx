@@ -7,14 +7,16 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Unlock } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { ModeToggle } from "@/components/mode-toggle";
 import { LegalDialog } from "@/components/legal/LegalDialog";
 
 const Login = () => {
+    const [role, setRole] = useState("player");
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
     const [otp, setOtp] = useState("");
-    const [step, setStep] = useState("credentials"); // "credentials" or "otp"
+    const [step, setStep] = useState("credentials");
     const [userId, setUserId] = useState(null);
     const { login, user } = useAuth();
     const navigate = useNavigate();
@@ -30,83 +32,25 @@ const Login = () => {
     const handleLogin = async (e) => {
         e.preventDefault();
 
-        // Step 1: Send credentials to get OTP (Admin Only)
-        if (step === "credentials") {
-            try {
-                const response = await fetch("/api/auth/admin-login", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ username, password })
-                });
+        try {
+            const loginOtp = step === "otp" ? otp : null;
+            const result = await login(username, password, role, loginOtp);
 
-                const data = await response.json();
-
-                if (data.requiresOtp) {
-                    setUserId(data.adminId);
+            if (result.success) {
+                if (result.requiresOtp) {
+                    setUserId(result.userId);
                     setStep("otp");
-                    toast.success("OTP sent! Check backend terminal.");
-                } else if (response.ok) {
-                    // Direct login (no OTP) - use context login to set auth state
-                    try {
-                        const result = await login(username, password);
-                        if (result.success) {
-                            toast.success("Welcome back.");
-                            navigate(from, { replace: true });
-                        } else {
-                            // Fallback: store raw token but warn
-                            console.warn('AuthContext.login failed:', result.message);
-                            if (data.token) localStorage.setItem("token", data.token);
-                            navigate(from, { replace: true });
-                        }
-                    } catch (err) {
-                        console.error('Context login error:', err);
-                        if (data.token) localStorage.setItem("token", data.token);
-                        navigate(from, { replace: true });
-                    }
+                    toast.success("Security code dispatched! Verification required.");
                 } else {
-                    toast.error(data.message || "Login failed.");
+                    toast.success(role === "admin" ? "Welcome back, Commander." : "Welcome back to the Arena!");
+                    const targetPath = role === "player" ? "/player" : from;
+                    navigate(targetPath, { replace: true });
                 }
-            } catch (error) {
-                toast.error("Connection error. Please try again.");
+            } else {
+                toast.error(result.message || "Access denied.");
             }
-        }
-        // Step 2: Verify OTP for Admin
-        else if (step === "otp") {
-            try {
-                const response = await fetch("/api/auth/admin-login", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ username, password, otp })
-                });
-
-                const data = await response.json();
-
-                if (response.ok) {
-                    // After OTP verified, update auth context by performing a context login
-                    try {
-                        const result = await login(username, password);
-                        if (result.success) {
-                            toast.success("Verified! Welcome back.");
-                            navigate(from, { replace: true });
-                        } else {
-                            // If context login fails, store token returned by API as fallback
-                            console.warn('AuthContext.login failed after OTP:', result.message);
-                            if (data.token) localStorage.setItem("token", data.token);
-                            toast.success("Verified! Welcome back.");
-                            navigate(from, { replace: true });
-                        }
-                    } catch (err) {
-                        console.error('Context login error after OTP:', err);
-                        if (data.token) localStorage.setItem("token", data.token);
-                        toast.success("Verified! Welcome back.");
-                        navigate(from, { replace: true });
-                    }
-                } else {
-                    toast.error(data.message || "OTP verification failed.");
-                }
-            } catch (error) {
-                toast.error("Connection error. Please try again.");
-            }
+        } catch (error) {
+            toast.error("Nexus connection unstable. Try again.");
         }
     };
 
@@ -133,14 +77,39 @@ const Login = () => {
                     </div>
                     <div className="space-y-1">
                         <CardTitle className="text-3xl font-bold tracking-tight">
-                            {step === "credentials" ? "Welcome Back" : "Verify Identity"}
+                            {step === "credentials" ? (role === "admin" ? "Admin Access" : "Welcome Back") : "Verify Identity"}
                         </CardTitle>
                         <CardDescription className="text-muted-foreground font-medium">
                             {step === "credentials"
-                                ? "Enter your credentials to access the dashboard"
+                                ? (role === "admin" ? "Secure administrative portal" : "Enter your credentials to enter the arena")
                                 : "Check backend terminal for OTP code"}
                         </CardDescription>
                     </div>
+
+                    {step === "credentials" && (
+                        <div className="flex p-1 bg-secondary/30 rounded-xl max-w-[240px] mx-auto mt-4 border border-border/50">
+                            <button
+                                type="button"
+                                onClick={() => setRole("player")}
+                                className={cn(
+                                    "flex-1 py-2 px-4 rounded-lg text-xs font-bold transition-all",
+                                    role === "player" ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground"
+                                )}
+                            >
+                                PLAYER
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setRole("admin")}
+                                className={cn(
+                                    "flex-1 py-2 px-4 rounded-lg text-xs font-bold transition-all",
+                                    role === "admin" ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground"
+                                )}
+                            >
+                                ADMIN
+                            </button>
+                        </div>
+                    )}
                 </CardHeader>
                 <form onSubmit={handleLogin}>
                     <CardContent className="space-y-6 px-10 pt-4 pb-2">
@@ -186,7 +155,7 @@ const Login = () => {
                     <CardFooter className="flex flex-col space-y-6 px-10 pb-12 pt-8">
                         {step === "credentials" ? (
                             <Button className="w-full h-12 rounded-xl bg-primary text-primary-foreground font-bold text-md flex items-center justify-center gap-2 group hover:brightness-110 transition-all shadow-lg hover:shadow-primary/25" type="submit">
-                                Send OTP <Unlock className="w-4 h-4 ml-1 opacity-70" />
+                                {role === "admin" ? "Send Admin OTP" : "Sign In"} <Unlock className="w-4 h-4 ml-1 opacity-70" />
                             </Button>
                         ) : (
                             <div className="space-y-3 w-full">

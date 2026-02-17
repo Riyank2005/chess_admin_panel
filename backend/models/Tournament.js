@@ -26,12 +26,16 @@ const tournamentSchema = mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['registering', 'live', 'completed'],
-        default: 'registering'
+        enum: ['draft', 'registering', 'live', 'completed'],
+        default: 'draft'
     },
     startTime: {
         type: Date,
         default: Date.now
+    },
+    registrationEndDate: {
+        type: Date,
+        required: true
     },
     currentRound: {
         type: Number,

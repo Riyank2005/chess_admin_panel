@@ -34,7 +34,7 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import {
-  Trophy, Plus, Play, Pause, Users, Eye, Settings,
+  Trophy, Plus, Play, Pause, Users, Eye, Settings, Edit,
   Ban, Globe, Clock, ShieldCheck, ListOrdered,
   Share2, Zap, Target, FileDown
 } from "lucide-react";
@@ -47,8 +47,13 @@ export default function Tournaments() {
   const [tournaments, setTournaments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
   const [selectedTournament, setSelectedTournament] = useState(null);
+  const [editingTournamentId, setEditingTournamentId] = useState(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [players, setPlayers] = useState([]);
+  const [registeringPlayer, setRegisteringPlayer] = useState("");
+  const [isRegistering, setIsRegistering] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -56,11 +61,33 @@ export default function Tournaments() {
     timeControl: "10+0",
     maxPlayers: "64",
     prize: "",
+    startTime: "",
+    registrationEndDate: "",
   });
 
   useEffect(() => {
     fetchTournaments();
+    fetchPlayers();
   }, []);
+
+  const fetchPlayers = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const headers = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const response = await fetch("/api/users?limit=100", {
+        headers,
+      });
+
+      if (!response.ok) throw new Error("Failed to fetch players");
+
+      const data = await response.json();
+      setPlayers(data.users || []);
+    } catch (error) {
+      console.error("Fetch players error:", error);
+    }
+  };
 
   const handleExportReport = (tournament) => {
     try {
@@ -151,18 +178,75 @@ export default function Tournaments() {
   };
 
   const handleView = (tournament) => {
-    const enhancedTournament = {
-      ...tournament,
-      standings: tournament.enrolledPlayers?.length > 0 ? tournament.enrolledPlayers : [
-        { username: "Magnus_C", elo: 2850, points: 4.5, matches: 5 },
-        { username: "Hikaru_N", elo: 2790, points: 4.0, matches: 5 },
-        { username: "Pragg_R", elo: 2750, points: 3.5, matches: 5 },
-        { username: "Gukesh_D", elo: 2760, points: 3.5, matches: 5 },
-        { username: "Fabiano_C", elo: 2800, points: 3.0, matches: 5 },
-      ]
-    };
-    setSelectedTournament(enhancedTournament);
+    setSelectedTournament(tournament);
     setIsDetailsOpen(true);
+  };
+
+  const handleManualRegister = async () => {
+    if (!registeringPlayer) {
+      toast.error("Please select a player");
+      return;
+    }
+
+    try {
+      setIsRegistering(true);
+      const token = localStorage.getItem("token");
+      const headers = {
+        "Content-Type": "application/json",
+      };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const response = await fetch(`/api/tournaments/${selectedTournament._id}/register`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          playerId: registeringPlayer,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        const errorMessage = errorData.message || errorData.error || "Failed to register player";
+        throw new Error(errorMessage);
+      }
+
+      const updatedTournament = await response.json();
+      setSelectedTournament(updatedTournament);
+      setTournaments(tournaments.map(t => t._id === updatedTournament._id ? updatedTournament : t));
+      setRegisteringPlayer("");
+      toast.success("Player registered successfully!");
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setIsRegistering(false);
+    }
+  };
+
+  const handleKickPlayer = async (playerId, username) => {
+    if (!window.confirm(`Are you sure you want to remove ${username} from this tournament?`)) return;
+
+    try {
+      const token = localStorage.getItem("token");
+      const headers = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const response = await fetch(`/api/tournaments/${selectedTournament._id}/register/${playerId}`, {
+        method: "DELETE",
+        headers,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to remove player");
+      }
+
+      const updatedTournament = await response.json();
+      setSelectedTournament(updatedTournament);
+      setTournaments(tournaments.map(t => t._id === updatedTournament._id ? updatedTournament : t));
+      toast.success(`${username} has been removed from the mission.`);
+    } catch (error) {
+      toast.error(error.message);
+    }
   };
 
   const handleCreate = async () => {
@@ -186,6 +270,8 @@ export default function Tournaments() {
           timeControl: formData.timeControl,
           maxPlayers: parseInt(formData.maxPlayers),
           prize: formData.prize,
+          startTime: formData.startTime,
+          registrationEndDate: formData.registrationEndDate,
         }),
       });
 
@@ -198,8 +284,86 @@ export default function Tournaments() {
       const newTournament = await response.json();
       setTournaments([newTournament, ...tournaments]);
       setIsCreateOpen(false);
-      setFormData({ name: "", timeControl: "10+0", maxPlayers: "64", prize: "" });
+      setFormData({ name: "", timeControl: "10+0", maxPlayers: "64", prize: "", startTime: "", registrationEndDate: "" });
       toast.success(`Tournament "${formData.name}" created successfully!`);
+    } catch (error) {
+      toast.error(error.message);
+    }
+  };
+
+  const handleEditClick = (tournament) => {
+    setEditingTournamentId(tournament._id || tournament.id);
+    setFormData({
+      name: tournament.name,
+      timeControl: tournament.timeControl,
+      maxPlayers: tournament.maxPlayers.toString(),
+      prize: tournament.prize.replace('$', ''),
+      startTime: tournament.startTime ? new Date(tournament.startTime).toISOString().slice(0, 16) : "",
+      registrationEndDate: tournament.registrationEndDate ? new Date(tournament.registrationEndDate).toISOString().slice(0, 16) : "",
+    });
+    setIsEditOpen(true);
+  };
+
+  const handleUpdate = async () => {
+    if (!formData.name || !formData.prize) {
+      toast.error("Please fill in all required fields");
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem("token");
+      const headers = {
+        "Content-Type": "application/json",
+      };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const response = await fetch(`/api/tournaments/${editingTournamentId}`, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({
+          name: formData.name,
+          timeControl: formData.timeControl,
+          maxPlayers: parseInt(formData.maxPlayers),
+          prize: formData.prize,
+          startTime: formData.startTime,
+          registrationEndDate: formData.registrationEndDate,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to update tournament");
+      }
+
+      const updatedTournament = await response.json();
+      setTournaments(tournaments.map(t => (t._id || t.id) === editingTournamentId ? updatedTournament : t));
+      setIsEditOpen(false);
+      setFormData({ name: "", timeControl: "10+0", maxPlayers: "64", prize: "", startTime: "", registrationEndDate: "" });
+      toast.success(`Tournament updated successfully!`);
+    } catch (error) {
+      toast.error(error.message);
+    }
+  };
+
+  const handleStatusChange = async (id, status, name) => {
+    try {
+      const token = localStorage.getItem("token");
+      const headers = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const response = await fetch(`/api/tournaments/${id}/status`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ status }),
+      });
+
+      if (!response.ok) throw new Error("Failed to update status");
+
+      const updated = await response.json();
+      setTournaments(tournaments.map(t => (t._id || t.id) === id ? updated : t));
+
+      const action = status === 'registering' ? 'published' : status;
+      toast.success(`Tournament ${name} is now ${action}!`);
     } catch (error) {
       toast.error(error.message);
     }
@@ -305,11 +469,124 @@ export default function Tournaments() {
                     />
                   </div>
                 </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Reg. End Date</Label>
+                    <Input
+                      type="datetime-local"
+                      value={formData.registrationEndDate}
+                      onChange={(e) => setFormData({ ...formData, registrationEndDate: e.target.value })}
+                      className="h-12 rounded-xl bg-white/[0.03] border-white/5 text-white focus:ring-primary/20"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Start Date</Label>
+                    <Input
+                      type="datetime-local"
+                      value={formData.startTime}
+                      onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
+                      className="h-12 rounded-xl bg-white/[0.03] border-white/5 text-white focus:ring-primary/20"
+                    />
+                  </div>
+                </div>
                 <Button
                   onClick={handleCreate}
                   className="w-full h-12 rounded-xl bg-primary text-primary-foreground font-bold mt-4 hover:bg-primary/90"
                 >
                   Create Tournament
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* Edit Tournament Dialog */}
+          <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+            <DialogContent className="bg-card border-white/10 rounded-3xl p-8 max-w-lg outline-none overflow-hidden sm:rounded-[2rem]">
+              <DialogHeader className="mb-6">
+                <DialogTitle className="text-2xl font-bold text-white">Edit Tournament</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Tournament Name</Label>
+                  <Input
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    placeholder="Enter name..."
+                    className="h-12 rounded-xl bg-white/[0.03] border-white/5 text-white focus:ring-primary/20"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Time Control</Label>
+                    <Select
+                      value={formData.timeControl}
+                      onValueChange={(value) => setFormData({ ...formData, timeControl: value })}
+                    >
+                      <SelectTrigger className="h-12 rounded-xl bg-white/[0.03] border-white/5 text-white focus:ring-primary/20">
+                        <SelectValue placeholder="Select" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-card border-white/10 text-white rounded-xl">
+                        <SelectItem value="1+0">Bullet</SelectItem>
+                        <SelectItem value="3+0">Blitz</SelectItem>
+                        <SelectItem value="10+0">Rapid</SelectItem>
+                        <SelectItem value="30+0">Classical</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Max Players</Label>
+                    <Select
+                      value={formData.maxPlayers}
+                      onValueChange={(value) => setFormData({ ...formData, maxPlayers: value })}
+                    >
+                      <SelectTrigger className="h-12 rounded-xl bg-white/[0.03] border-white/5 text-white focus:ring-primary/20">
+                        <SelectValue placeholder="Limit" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-card border-white/10 text-white rounded-xl">
+                        <SelectItem value="16">16 Players</SelectItem>
+                        <SelectItem value="64">64 Players</SelectItem>
+                        <SelectItem value="128">128 Players</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Prize Pool</Label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-primary font-bold">$</span>
+                    <Input
+                      value={formData.prize}
+                      onChange={(e) => setFormData({ ...formData, prize: e.target.value })}
+                      placeholder="0.00"
+                      className="h-12 pl-8 rounded-xl bg-white/[0.03] border-white/5 text-white"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Reg. End Date</Label>
+                    <Input
+                      type="datetime-local"
+                      value={formData.registrationEndDate}
+                      onChange={(e) => setFormData({ ...formData, registrationEndDate: e.target.value })}
+                      className="h-12 rounded-xl bg-white/[0.03] border-white/5 text-white focus:ring-primary/20"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Start Date</Label>
+                    <Input
+                      type="datetime-local"
+                      value={formData.startTime}
+                      onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
+                      className="h-12 rounded-xl bg-white/[0.03] border-white/5 text-white focus:ring-primary/20"
+                    />
+                  </div>
+                </div>
+                <Button
+                  onClick={handleUpdate}
+                  className="w-full h-12 rounded-xl bg-primary text-primary-foreground font-bold mt-4 hover:bg-primary/90"
+                >
+                  Save Changes
                 </Button>
               </div>
             </DialogContent>
@@ -416,7 +693,9 @@ export default function Tournaments() {
                             ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
                             : tournament.status === "registering"
                               ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
-                              : "bg-white/5 text-muted-foreground border-white/5"
+                              : tournament.status === "draft"
+                                ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                                : "bg-white/5 text-muted-foreground border-white/5"
                         )}
                       >
                         {tournament.status}
@@ -433,7 +712,17 @@ export default function Tournaments() {
                           <Eye className="h-3.5 w-3.5" />
                         </Button>
 
-                        {tournament.status === "live" ? (
+                        {tournament.status === "draft" ? (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-amber-400 hover:bg-white/10 rounded-lg transition-all"
+                            onClick={() => handleStatusChange(tournament._id || tournament.id, 'registering', tournament.name)}
+                            title="Publish Tournament"
+                          >
+                            <Globe className="h-3.5 w-3.5" />
+                          </Button>
+                        ) : tournament.status === "live" ? (
                           <Button
                             variant="ghost"
                             size="icon"
@@ -447,7 +736,7 @@ export default function Tournaments() {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 text-muted-foreground hover:text-emerald-400 hover:bg-white/10 rounded-lg transition-all"
-                            onClick={() => toast.success(`${tournament.name} resumed. Initializing pairings...`)}
+                            onClick={() => toast.success(`${tournament.name} will start soon.`)}
                           >
                             <Play className="h-3.5 w-3.5" />
                           </Button>
@@ -463,6 +752,15 @@ export default function Tournaments() {
                           }}
                         >
                           <Settings className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-blue-400 hover:bg-white/10 rounded-lg transition-all"
+                          onClick={() => handleEditClick(tournament)}
+                          title="Edit Details"
+                        >
+                          <Edit className="h-3.5 w-3.5" />
                         </Button>
                         <Button
                           variant="ghost"
@@ -547,8 +845,11 @@ export default function Tournaments() {
                     <TabsTrigger value="overview" className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-white text-muted-foreground text-xs font-bold uppercase tracking-[0.2em]">
                       Overview
                     </TabsTrigger>
+                    <TabsTrigger value="participants" className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-white text-muted-foreground text-xs font-bold uppercase tracking-[0.2em]">
+                      Participants
+                    </TabsTrigger>
                     <TabsTrigger value="leaderboard" className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-white text-muted-foreground text-xs font-bold uppercase tracking-[0.2em]">
-                      Live Standings
+                      Standings
                     </TabsTrigger>
                     <TabsTrigger value="bracket" className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-white text-muted-foreground text-xs font-bold uppercase tracking-[0.2em]">
                       Tactical Brackets
@@ -558,21 +859,26 @@ export default function Tournaments() {
 
                 <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
                   <TabsContent value="overview" className="mt-0 space-y-8 animate-in slide-in-from-bottom-2 duration-500">
-                    <div className="grid grid-cols-3 gap-6">
+                    <div className="grid grid-cols-4 gap-6">
                       <div className="bg-white/[0.03] border border-white/5 rounded-3xl p-6 flex flex-col gap-2">
                         <Zap className="h-5 w-5 text-primary mb-2" />
                         <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em]">Format</span>
-                        <span className="text-2xl font-black text-white font-mono">{selectedTournament.timeControl}</span>
+                        <span className="text-xl font-black text-white font-mono">{selectedTournament.timeControl}</span>
                       </div>
                       <div className="bg-white/[0.03] border border-white/5 rounded-3xl p-6 flex flex-col gap-2">
                         <Target className="h-5 w-5 text-primary mb-2" />
                         <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em]">Prize Pool</span>
-                        <span className="text-2xl font-black text-primary font-mono">{selectedTournament.prize}</span>
+                        <span className="text-xl font-black text-primary font-mono">{selectedTournament.prize}</span>
+                      </div>
+                      <div className="bg-white/[0.03] border border-white/5 rounded-3xl p-6 flex flex-col gap-2">
+                        <Clock className="h-5 w-5 text-primary mb-2" />
+                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em]">Reg. Ends</span>
+                        <span className="text-xs font-bold text-white font-mono">{selectedTournament.registrationEndDate ? new Date(selectedTournament.registrationEndDate).toLocaleString() : 'N/A'}</span>
                       </div>
                       <div className="bg-white/[0.03] border border-white/5 rounded-3xl p-6 flex flex-col gap-2">
                         <Globe className="h-5 w-5 text-primary mb-2" />
                         <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em]">Status</span>
-                        <span className="text-2xl font-black text-white font-mono uppercase">{selectedTournament.status}</span>
+                        <span className="text-xl font-black text-white font-mono uppercase">{selectedTournament.status}</span>
                       </div>
                     </div>
 
@@ -598,6 +904,85 @@ export default function Tournaments() {
                     </div>
                   </TabsContent>
 
+                  <TabsContent value="participants" className="mt-0 space-y-6 animate-in slide-in-from-bottom-2 duration-500">
+                    <div className="flex items-end gap-4 p-6 bg-white/[0.03] border border-white/5 rounded-3xl">
+                      <div className="flex-1 space-y-2">
+                        <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest pl-1">Manual Enrollment Protocol</Label>
+                        <Select
+                          value={registeringPlayer}
+                          onValueChange={setRegisteringPlayer}
+                        >
+                          <SelectTrigger className="h-12 bg-white/5 border-white/10 rounded-xl text-white">
+                            <SelectValue placeholder="Select operator to enroll..." />
+                          </SelectTrigger>
+                          <SelectContent className="bg-card border-white/10 text-white max-h-60">
+                            {players.map(p => (
+                              <SelectItem key={p._id} value={p._id}>
+                                {p.username} (ELO: {p.elo})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <Button
+                        onClick={handleManualRegister}
+                        disabled={isRegistering}
+                        className="h-12 px-8 rounded-xl bg-primary text-primary-foreground font-bold hover:shadow-[0_0_20px_rgba(var(--primary),0.3)]"
+                      >
+                        {isRegistering ? "Enrolling..." : "Enroll Operator"}
+                      </Button>
+                    </div>
+
+                    <div className="rounded-3xl border border-white/10 bg-white/[0.02] overflow-hidden">
+                      <Table>
+                        <TableHeader className="bg-white/5">
+                          <TableRow className="border-b border-white/10 hover:bg-transparent">
+                            <TableHead className="text-[10px] font-black uppercase tracking-widest text-muted-foreground py-4 pl-8">Operator</TableHead>
+                            <TableHead className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">ELO Rating</TableHead>
+                            <TableHead className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Status</TableHead>
+                            <TableHead className="text-[10px] font-black uppercase tracking-widest text-muted-foreground text-right pr-8">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {(!selectedTournament.enrolledPlayers || selectedTournament.enrolledPlayers.length === 0) ? (
+                            <TableRow>
+                              <TableCell colSpan={4} className="h-32 text-center text-muted-foreground font-medium italic">
+                                No operators currently enrolled in this mission.
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            selectedTournament.enrolledPlayers.map((player, idx) => (
+                              <TableRow key={idx} className="border-b border-white/[0.03] hover:bg-white/[0.05] transition-colors">
+                                <TableCell className="pl-8 py-4">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-full bg-primary/20 border border-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">
+                                      {player.username?.[0] || "?"}
+                                    </div>
+                                    <span className="font-bold text-white text-sm">{player.username}</span>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="font-mono text-xs text-muted-foreground">{player.elo}</TableCell>
+                                <TableCell>
+                                  <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[8px] font-black uppercase px-2">Ready</Badge>
+                                </TableCell>
+                                <TableCell className="text-right pr-8">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-rose-500 hover:bg-rose-500/10 rounded-lg"
+                                    onClick={() => handleKickPlayer(player.player, player.username)}
+                                  >
+                                    <Ban className="h-3.5 w-3.5" />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </TabsContent>
+
                   <TabsContent value="leaderboard" className="mt-0 animate-in slide-in-from-bottom-2 duration-500">
                     <div className="rounded-3xl border border-white/10 bg-white/[0.02] overflow-hidden">
                       <Table>
@@ -611,46 +996,54 @@ export default function Tournaments() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {(selectedTournament.standings || []).map((player, idx) => (
-                            <TableRow key={idx} className="border-b border-white/[0.03] hover:bg-white/[0.05] transition-colors group">
-                              <TableCell className="text-center font-black text-sm py-4">
-                                <span className={cn(
-                                  "w-8 h-8 rounded-lg flex items-center justify-center mx-auto",
-                                  idx === 0 ? "bg-amber-400/10 text-amber-400 border border-amber-400/20" :
-                                    idx === 1 ? "bg-slate-400/10 text-slate-400 border border-slate-400/20" :
-                                      idx === 2 ? "bg-amber-700/10 text-amber-700 border border-amber-700/20" :
-                                        "text-muted-foreground"
-                                )}>
-                                  {idx + 1}
-                                </span>
-                              </TableCell>
-                              <TableCell>
-                                <div className="flex items-center gap-3">
-                                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-transparent border border-white/10 flex items-center justify-center text-[10px] font-bold">
-                                    {player.username?.[0] || "?"}
-                                  </div>
-                                  <span className="font-bold text-white text-sm tracking-tight">{player.username}</span>
-                                  {idx === 0 && <Trophy className="h-3 w-3 text-amber-400" />}
-                                </div>
-                              </TableCell>
-                              <TableCell className="font-mono text-xs text-muted-foreground">{player.elo}</TableCell>
-                              <TableCell className="text-center">
-                                <span className="font-black text-primary text-base tabular-nums">{player.points}</span>
-                              </TableCell>
-                              <TableCell className="text-right pr-8">
-                                <div className="flex items-center justify-end gap-1">
-                                  {[1, 2, 3, 4, 5].map((m) => (
-                                    <div key={m} className={cn(
-                                      "w-2.5 h-2.5 rounded-sm border",
-                                      m <= player.points ? "bg-emerald-500/40 border-emerald-500/40" :
-                                        m === Math.ceil(player.points) && player.points % 1 !== 0 ? "bg-amber-500/40 border-amber-500/40" :
-                                          "bg-white/5 border-white/10"
-                                    )} />
-                                  ))}
-                                </div>
+                          {(!selectedTournament.enrolledPlayers || selectedTournament.enrolledPlayers.length === 0) ? (
+                            <TableRow>
+                              <TableCell colSpan={5} className="h-32 text-center text-muted-foreground font-medium italic">
+                                Mission in progress. Waiting for initial tactical sync.
                               </TableCell>
                             </TableRow>
-                          ))}
+                          ) : (
+                            selectedTournament.enrolledPlayers.map((player, idx) => (
+                              <TableRow key={idx} className="border-b border-white/[0.03] hover:bg-white/[0.05] transition-colors group">
+                                <TableCell className="text-center font-black text-sm py-4">
+                                  <span className={cn(
+                                    "w-8 h-8 rounded-lg flex items-center justify-center mx-auto",
+                                    idx === 0 ? "bg-amber-400/10 text-amber-400 border border-amber-400/20" :
+                                      idx === 1 ? "bg-slate-400/10 text-slate-400 border border-slate-400/20" :
+                                        idx === 2 ? "bg-amber-700/10 text-amber-700 border border-amber-700/20" :
+                                          "text-muted-foreground"
+                                  )}>
+                                    {idx + 1}
+                                  </span>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-transparent border border-white/10 flex items-center justify-center text-[10px] font-bold">
+                                      {player.username?.[0] || "?"}
+                                    </div>
+                                    <span className="font-bold text-white text-sm tracking-tight">{player.username}</span>
+                                    {idx === 0 && <Trophy className="h-3 w-3 text-amber-400" />}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="font-mono text-xs text-muted-foreground">{player.elo}</TableCell>
+                                <TableCell className="text-center">
+                                  <span className="font-black text-primary text-base tabular-nums">{player.points}</span>
+                                </TableCell>
+                                <TableCell className="text-right pr-8">
+                                  <div className="flex items-center justify-end gap-1">
+                                    {[1, 2, 3, 4, 5].map((m) => (
+                                      <div key={m} className={cn(
+                                        "w-2.5 h-2.5 rounded-sm border",
+                                        m <= player.points ? "bg-emerald-500/40 border-emerald-500/40" :
+                                          m === Math.ceil(player.points) && player.points % 1 !== 0 ? "bg-amber-500/40 border-amber-500/40" :
+                                            "bg-white/5 border-white/10"
+                                      )} />
+                                    ))}
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
                         </TableBody>
                       </Table>
                     </div>

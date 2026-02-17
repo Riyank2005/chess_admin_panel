@@ -16,6 +16,7 @@ const createAdmin = async () => {
         const admin = await Admin.create({
             username: 'admin',
             email: 'admin@chess.com',
+            phone: '0000000000',
             password: 'admin123',
             clearanceLevel: 'SUPER_ADMIN'
         });

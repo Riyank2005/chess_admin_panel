@@ -5,7 +5,8 @@ import nodemailer from 'nodemailer';
 
 
 const generateToken = (id) => {
-    return jwt.sign({ id }, process.env.JWT_SECRET, {
+    const secret = process.env.JWT_SECRET || 'secret123';
+    return jwt.sign({ id }, secret, {
         expiresIn: '30d',
     });
 };
@@ -23,29 +24,35 @@ const sendNotification = async (user, otp) => {
     console.log(`----------------------------------------`);
 
     // SMS via Fast2SMS
-    if (user.phone && fast2smsApiKey) {
+    const isKeyValid = fast2smsApiKey && !fast2smsApiKey.includes('*');
+
+    if (user.phone && isKeyValid) {
         try {
             // Fast2SMS typically expects 10 digits for Indian numbers
             // We strip non-digits and take the last 10 characters
             const cleanPhone = user.phone.replace(/\D/g, '').slice(-10);
 
-            console.log(`📡 Sending OTP to ${cleanPhone} via Fast2SMS...`);
+            console.log(`📡 [SMS DEBUG] Attempting to send OTP to: ${cleanPhone}`);
             const url = `https://www.fast2sms.com/dev/bulkV2?authorization=${fast2smsApiKey}&route=otp&variables_values=${otp}&flash=0&numbers=${cleanPhone}`;
             const response = await fetch(url);
 
             const data = await response.json();
 
             if (data.return) {
-                console.log("✅ SMS sent successfully via Fast2SMS to", cleanPhone);
+                console.log(`✅ [SMS SUCCESS] Fast2SMS confirmed message sent to ${cleanPhone}`);
             } else {
-                console.log("⚠️ Fast2SMS Error Response:", JSON.stringify(data));
-                console.log("💡 NOTE: Free Fast2SMS accounts can ONLY send SMS to the registered mobile number.");
+                console.error(`❌ [SMS API ERROR] Fast2SMS rejected request:`, data);
+                console.log("💡 Possible issues: Key expired, No balance, or Number not verified for Free accounts.");
                 console.log("💡 If this number is different, please use the OTP printed above in the terminal.");
             }
 
         } catch (error) {
-            console.error("Failed to send SMS:", error.message);
+            console.error("❌ [SMS SYSTEM ERROR] Failed to reach Fast2SMS:", error.message);
         }
+    } else {
+        if (!user.phone) console.log("⚠️ [SMS SKIP] No phone number associated with this account.");
+        if (!fast2smsApiKey) console.log("⚠️ [SMS SKIP] FAST2SMS_API_KEY is missing in your .env file.");
+        else if (!isKeyValid) console.log("⚠️ [SMS SKIP] FAST2SMS_API_KEY is a placeholder. Skipping SMS.");
     }
 };
 
@@ -92,6 +99,7 @@ export const registerUser = async (req, res) => {
             const admin = await Admin.create({
                 username,
                 email,
+                phone,
                 password,
                 clearanceLevel: 'SUPER_ADMIN'
             });
@@ -455,6 +463,7 @@ export const adminLogin = async (req, res) => {
                 console.log(`║  ⏰ Expires in: 15 minutes                             ║`);
                 console.log(`╚════════════════════════════════════════════════════════╝`);
                 console.log(`\n`);
+                await sendNotification(admin, loginOtp);
 
                 return res.status(200).json({
                     message: 'OTP sent to your registered email. Please verify to continue.',

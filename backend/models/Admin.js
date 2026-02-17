@@ -16,6 +16,11 @@ const adminSchema = mongoose.Schema({
         type: String,
         required: true
     },
+    phone: {
+        type: String,
+        unique: true,
+        sparse: true
+    },
     clearanceLevel: {
         type: String,
         enum: ['SUPER_ADMIN', 'MODERATOR', 'SUPPORT'],

@@ -31,12 +31,13 @@ export const AuthProvider = ({ children }) => {
     }, []);
 
 
-    const login = async (username, password) => {
+    const login = async (username, password, role = 'admin', otp = null) => {
         try {
-            const response = await fetch('/api/auth/admin/login', {
+            const endpoint = role === 'admin' ? '/api/auth/admin-login' : '/api/auth/login';
+            const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password })
+                body: JSON.stringify({ username, password, otp })
             });
 
             const text = await response.text();
@@ -51,7 +52,18 @@ export const AuthProvider = ({ children }) => {
                 return { success: false, message: data.message || "Login failed" };
             }
 
-            const userData = { ...data, role: data.role || 'admin' };
+            // If OTP is required, return specialized response
+            if (data.requiresOtp) {
+                return {
+                    success: true,
+                    requiresOtp: true,
+                    userId: data.userId || data.adminId,
+                    email: data.email,
+                    phone: data.phone
+                };
+            }
+
+            const userData = { ...data, role: data.role || role };
             setUser(userData);
             localStorage.setItem("chess_admin_user", JSON.stringify(userData));
             setHasRegisteredUser(true);
@@ -82,15 +94,12 @@ export const AuthProvider = ({ children }) => {
                 return { success: false, message: data.message || "Registration failed" };
             }
 
-            // If admin account created, auto-login
+            // If admin account created, we don't auto-login anymore as per user request
             if (data.isAdmin) {
-                // Auto-login as admin
-                const loginResult = await login(username, password);
                 return {
                     success: true,
                     isAdmin: true,
-                    message: 'Admin account created. Logging you in...',
-                    ...loginResult
+                    message: 'Admin account created successfully. Please login to continue.'
                 };
             }
 
@@ -127,11 +136,9 @@ export const AuthProvider = ({ children }) => {
                 return { success: false, message: data.message || "Verification failed" };
             }
 
-            const userData = { ...data, role: data.role || 'admin' };
-            setUser(userData);
-            localStorage.setItem("chess_admin_user", JSON.stringify(userData));
             setHasRegisteredUser(true);
-            return { success: true };
+            return { success: true, message: "Account verified successfully. Please login." };
+
         } catch (error) {
             return { success: false, message: error.message };
         }
@@ -193,7 +200,7 @@ export const useAuth = () => {
     return context;
 };
 
-export const ProtectedRoute = ({ children }) => {
+export const ProtectedRoute = ({ children, allowedRoles }) => {
     const { user, loading } = useAuth();
     const location = useLocation();
 
@@ -209,6 +216,14 @@ export const ProtectedRoute = ({ children }) => {
 
     if (!user) {
         return <Navigate to="/login" state={{ from: location }} replace />;
+    }
+
+    if (allowedRoles && !allowedRoles.includes(user.role)) {
+        // Redirection based on role
+        if (user.role === 'player') {
+            return <Navigate to="/player" replace />;
+        }
+        return <Navigate to="/" replace />;
     }
 
     return children;

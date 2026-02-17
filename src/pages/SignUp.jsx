@@ -21,6 +21,7 @@ const SignUp = () => {
     const [otp, setOtp] = useState(["", "", "", "", "", ""]);
     const [step, setStep] = useState(1);
     const [userId, setUserId] = useState(null);
+    const [role, setRole] = useState("player");
     const [isClearing, setIsClearing] = useState(false);
     const [isError, setIsError] = useState(false);
     const [timer, setTimer] = useState(0);
@@ -50,20 +51,20 @@ const SignUp = () => {
             return;
         }
 
-        const phoneToSend = phone || "0000000000";
-
-        const result = await register(username, email, phoneToSend, password, "admin");
+        const result = await register(username, email, phone, password, role);
         if (result.success) {
-            setIsClearing(true);
-            console.log("Admin Account Created!");
-
-            toast.success("Admin account created! Redirecting to login...");
-
-            // Redirect to login after 2 seconds
-            setTimeout(() => {
-                setIsClearing(false);
-                navigate("/login", { replace: true });
-            }, 2000);
+            if (role === "admin") {
+                setIsClearing(true);
+                toast.success(result.message || "Admin account created! Redirecting to login...");
+                setTimeout(() => {
+                    setIsClearing(false);
+                    navigate("/login", { replace: true });
+                }, 2000);
+            } else {
+                setUserId(result.userId);
+                setStep(2);
+                toast.success("Account created! Please verify your OTP.");
+            }
         } else {
             toast.error(result.message || "Registration failed.");
             setIsError(true);
@@ -113,8 +114,8 @@ const SignUp = () => {
 
         const result = await verifyOtp(userId, fullOtp);
         if (result.success) {
-            toast.success("Account Verified.");
-            navigate("/");
+            toast.success("Account Verified. Please login.");
+            navigate("/login");
         } else {
             toast.error(result.message || "Invalid OTP.");
             setIsError(true);
@@ -153,89 +154,163 @@ const SignUp = () => {
                             </div>
                             <div className="space-y-1">
                                 <CardTitle className="text-3xl font-bold tracking-tight">
-                                    Create Account
+                                    {step === 1 ? "Create Account" : "Verify OTP"}
                                 </CardTitle>
                                 <CardDescription className="text-muted-foreground font-medium">
-                                    Enter your details to register
+                                    {step === 1 ? "Enter your details to register" : "Enter the 6-digit code sent to you"}
                                 </CardDescription>
                             </div>
+
+                            {step === 1 && (
+                                <div className="flex p-1 bg-secondary/30 rounded-xl max-w-[240px] mx-auto mt-4 border border-border/50">
+                                    <button
+                                        type="button"
+                                        onClick={() => setRole("player")}
+                                        className={cn(
+                                            "flex-1 py-2 px-4 rounded-lg text-xs font-bold transition-all",
+                                            role === "player" ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground"
+                                        )}
+                                    >
+                                        PLAYER
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setRole("admin")}
+                                        className={cn(
+                                            "flex-1 py-2 px-4 rounded-lg text-xs font-bold transition-all",
+                                            role === "admin" ? "bg-primary text-primary-foreground shadow-lg" : "text-muted-foreground hover:text-foreground"
+                                        )}
+                                    >
+                                        ADMIN
+                                    </button>
+                                </div>
+                            )}
                         </CardHeader>
 
-                        <form onSubmit={handleRegister}>
-                            <CardContent className="space-y-5 px-8 pt-4 pb-2">
-                                <div className="space-y-2 group">
-                                    <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground ml-1">Username</Label>
-                                    <Input
-                                        placeholder="Username..."
-                                        value={username}
-                                        onChange={(e) => setUsername(e.target.value)}
-                                        className="h-12 rounded-xl border-border bg-secondary/20 focus:bg-background focus:ring-primary/20 transition-all text-foreground"
-                                        required
-                                    />
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
+                        {step === 1 ? (
+                            <form onSubmit={handleRegister}>
+                                <CardContent className="space-y-5 px-8 pt-4 pb-2">
                                     <div className="space-y-2 group">
-                                        <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground ml-1">Email</Label>
+                                        <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground ml-1">Username</Label>
                                         <Input
-                                            type="email"
-                                            placeholder="email@example.com"
-                                            value={email}
-                                            onChange={(e) => setEmail(e.target.value)}
+                                            placeholder="Username..."
+                                            value={username}
+                                            onChange={(e) => setUsername(e.target.value)}
                                             className="h-12 rounded-xl border-border bg-secondary/20 focus:bg-background focus:ring-primary/20 transition-all text-foreground"
                                             required
                                         />
                                     </div>
-                                    <div className="space-y-2 group">
-                                        <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground ml-1">Phone</Label>
-                                        <Input
-                                            placeholder="+1 000..."
-                                            value={phone}
-                                            onChange={(e) => setPhone(e.target.value)}
-                                            className="h-12 rounded-xl border-border bg-secondary/20 focus:bg-background focus:ring-primary/20 transition-all text-foreground"
-                                            required
-                                        />
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2 group">
+                                            <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground ml-1">Email</Label>
+                                            <Input
+                                                type="email"
+                                                placeholder="email@example.com"
+                                                value={email}
+                                                onChange={(e) => setEmail(e.target.value)}
+                                                className="h-12 rounded-xl border-border bg-secondary/20 focus:bg-background focus:ring-primary/20 transition-all text-foreground"
+                                                required
+                                            />
+                                        </div>
+                                        <div className="space-y-2 group">
+                                            <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground ml-1">Phone</Label>
+                                            <Input
+                                                placeholder="+1 000..."
+                                                value={phone}
+                                                onChange={(e) => setPhone(e.target.value)}
+                                                className="h-12 rounded-xl border-border bg-secondary/20 focus:bg-background focus:ring-primary/20 transition-all text-foreground"
+                                                required
+                                            />
+                                        </div>
                                     </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2 group">
-                                        <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground ml-1">Password</Label>
-                                        <Input
-                                            type="password"
-                                            placeholder="••••••••"
-                                            value={password}
-                                            onChange={(e) => setPassword(e.target.value)}
-                                            className="h-12 rounded-xl border-border bg-secondary/20 focus:bg-background focus:ring-primary/20 transition-all text-foreground"
-                                            required
-                                        />
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2 group">
+                                            <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground ml-1">Password</Label>
+                                            <Input
+                                                type="password"
+                                                placeholder="••••••••"
+                                                value={password}
+                                                onChange={(e) => setPassword(e.target.value)}
+                                                className="h-12 rounded-xl border-border bg-secondary/20 focus:bg-background focus:ring-primary/20 transition-all text-foreground"
+                                                required
+                                            />
+                                        </div>
+                                        <div className="space-y-2 group">
+                                            <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground ml-1">Confirm</Label>
+                                            <Input
+                                                type="password"
+                                                placeholder="••••••••"
+                                                value={confirmPassword}
+                                                onChange={(e) => setConfirmPassword(e.target.value)}
+                                                className="h-12 rounded-xl border-border bg-secondary/20 focus:bg-background focus:ring-primary/20 transition-all text-foreground"
+                                                required
+                                            />
+                                        </div>
                                     </div>
-                                    <div className="space-y-2 group">
-                                        <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground ml-1">Confirm</Label>
-                                        <Input
-                                            type="password"
-                                            placeholder="••••••••"
-                                            value={confirmPassword}
-                                            onChange={(e) => setConfirmPassword(e.target.value)}
-                                            className="h-12 rounded-xl border-border bg-secondary/20 focus:bg-background focus:ring-primary/20 transition-all text-foreground"
-                                            required
-                                        />
-                                    </div>
-                                </div>
-                            </CardContent>
-                            <CardFooter className="flex flex-col space-y-6 px-8 pb-10 pt-8">
-                                <Button className="w-full h-12 rounded-xl bg-primary text-primary-foreground font-bold text-md shadow-lg hover:shadow-primary/25 transition-all" type="submit">
-                                    Sign Up <ArrowRight className="w-4 h-4 ml-2" />
-                                </Button>
+                                </CardContent>
+                                <CardFooter className="flex flex-col space-y-6 px-8 pb-10 pt-8">
+                                    <Button className="w-full h-12 rounded-xl bg-primary text-primary-foreground font-bold text-md shadow-lg hover:shadow-primary/25 transition-all" type="submit">
+                                        Sign Up <ArrowRight className="w-4 h-4 ml-2" />
+                                    </Button>
 
-                                <div className="text-center space-y-4">
-                                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                                        Already have an account?{" "}
-                                        <Link to="/login" className="text-primary hover:text-foreground transition-colors underline underline-offset-4">
-                                            Sign In
-                                        </Link>
-                                    </p>
-                                </div>
-                            </CardFooter>
-                        </form>
+                                    <div className="text-center space-y-4">
+                                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                                            Already have an account?{" "}
+                                            <Link to="/login" className="text-primary hover:text-foreground transition-colors underline underline-offset-4">
+                                                Sign In
+                                            </Link>
+                                        </p>
+                                    </div>
+                                </CardFooter>
+                            </form>
+                        ) : (
+                            <form onSubmit={handleVerify}>
+                                <CardContent className="space-y-8 px-8 pt-8 pb-4">
+                                    <div className="flex justify-between gap-2">
+                                        {otp.map((digit, index) => (
+                                            <Input
+                                                key={index}
+                                                id={`otp-${index}`}
+                                                type="text"
+                                                maxLength={1}
+                                                value={digit}
+                                                onChange={(e) => handleOtpChange(index, e.target.value)}
+                                                onKeyDown={(e) => handleKeyDown(index, e)}
+                                                className="w-12 h-14 text-center text-xl font-bold bg-secondary/20 border-border rounded-xl focus:ring-primary/20 transition-all"
+                                                required
+                                            />
+                                        ))}
+                                    </div>
+
+                                    <div className="text-center">
+                                        <button
+                                            type="button"
+                                            onClick={handleResend}
+                                            disabled={timer > 0}
+                                            className={cn(
+                                                "text-xs font-bold uppercase tracking-widest transition-all",
+                                                timer > 0 ? "text-muted-foreground" : "text-primary hover:text-foreground"
+                                            )}
+                                        >
+                                            {timer > 0 ? `Resend OTP in ${timer}s` : "Resend OTP"}
+                                        </button>
+                                    </div>
+                                </CardContent>
+                                <CardFooter className="flex flex-col space-y-6 px-8 pb-10 pt-4">
+                                    <Button className="w-full h-12 rounded-xl bg-primary text-primary-foreground font-bold text-md shadow-lg hover:shadow-primary/25 transition-all" type="submit">
+                                        Verify Identity <ShieldCheck className="w-4 h-4 ml-2" />
+                                    </Button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => setStep(1)}
+                                        className="text-[10px] text-muted-foreground uppercase tracking-widest hover:text-foreground transition-colors"
+                                    >
+                                        Back to Info
+                                    </button>
+                                </CardFooter>
+                            </form>
+                        )}
                     </>
                 )}
             </Card>

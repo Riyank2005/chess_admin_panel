@@ -116,6 +116,11 @@ const corsOptions = {
     // Allow requests with no origin (mobile apps, Postman, etc.)
     if (!origin) return callback(null, true);
 
+    // In development, we can be more permissive
+    if (process.env.NODE_ENV === 'development') {
+      return callback(null, true);
+    }
+
     const allowedOrigins = [
       'http://localhost:5173',
       'http://localhost:5174',
@@ -123,14 +128,16 @@ const corsOptions = {
       'http://127.0.0.1:5173',
       'http://127.0.0.1:5174',
       'http://127.0.0.1:3000',
-      // Add production domains here
-      // 'https://yourdomain.com',
-      // 'https://www.yourdomain.com'
+      'http://10.32.234.244:5173',
     ];
 
-    if (allowedOrigins.indexOf(origin) !== -1) {
+    const isLocalhost = origin.includes('localhost') || origin.includes('127.0.0.1');
+    const isVitePort = origin.endsWith(':5173') || origin.endsWith(':5174');
+
+    if (allowedOrigins.indexOf(origin) !== -1 || (isLocalhost && isVitePort)) {
       callback(null, true);
     } else {
+      console.error(`[CORS] ❌ Origin blocked: ${origin}`);
       callback(new Error('Not allowed by CORS'));
     }
   },

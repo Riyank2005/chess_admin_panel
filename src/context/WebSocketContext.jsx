@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { io } from 'socket.io-client';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from './AuthContext';
 
 const WebSocketContext = createContext(null);
 
@@ -17,6 +18,7 @@ export const WebSocketProvider = ({ children }) => {
     const [connected, setConnected] = useState(false);
     const [reconnectAttempts, setReconnectAttempts] = useState(0);
     const { toast } = useToast();
+    const { user } = useAuth();
 
     useEffect(() => {
         // Initialize socket connection
@@ -34,16 +36,6 @@ export const WebSocketProvider = ({ children }) => {
             console.log('[WebSocket] ⚡ Connected:', socketInstance.id);
             setConnected(true);
             setReconnectAttempts(0);
-
-            // Join admin room if user is admin
-            const user = JSON.parse(localStorage.getItem('user') || '{}');
-            if (user.role === 'admin') {
-                socketInstance.emit('admin:join', user.id || user._id);
-                console.log('[WebSocket] 👑 Joined admin room');
-            } else if (user.id || user._id) {
-                socketInstance.emit('user:join', user.id || user._id);
-                console.log('[WebSocket] 👤 Joined user room');
-            }
         });
 
         socketInstance.on('disconnect', (reason) => {
@@ -87,6 +79,21 @@ export const WebSocketProvider = ({ children }) => {
             }
         };
     }, []);
+
+    // Identify user when connected/logged in
+    useEffect(() => {
+        if (!socket || !connected || !user) return;
+
+        console.log('[WebSocket] 🆔 Identifying as:', user.username || 'Unknown');
+
+        if (user.role === 'admin') {
+            socket.emit('admin:join', user.id || user._id);
+            console.log('[WebSocket] 👑 Joined admin room');
+        } else {
+            socket.emit('user:join', user.id || user._id);
+            console.log('[WebSocket] 👤 Joined user room');
+        }
+    }, [socket, connected, user]);
 
     // Subscribe to event
     const subscribe = useCallback((event, callback) => {
