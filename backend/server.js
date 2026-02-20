@@ -18,7 +18,18 @@ import apiKeyRoutes from './routes/apiKeyRoutes.js';
 import taskRoutes from './routes/taskRoutes.js';
 import admin2faRoutes from './routes/admin2faRoutes.js';
 import tournamentRoutes from './routes/tournamentRoutes.js';
+import playerRoutes from './routes/playerRoutes.js';
+import reportRoutes from './routes/reportRoutes.js';
+import socialRoutes from './routes/socialRoutes.js';
+import chatRoutes from './routes/chatRoutes.js';
 import { loginAdmin } from './controllers/adminAuthController.js';
+// playerRoutes imported on line 21
+
+// ... (existing imports)
+
+// ...
+
+
 import { handleGameSocket } from './socket/gameSocket.js';
 import {
     apiLimiter,
@@ -209,9 +220,9 @@ app.get('/api/socket/status', (req, res) => {
 // Routes
 app.post('/api/auth/admin/login', loginAdmin);
 app.use('/api/auth', authRoutes);
+app.use('/api/game-moderation', gameModRoutes);
 app.use('/api/games', gameRoutes);
 app.use('/api/users/management', userManagementRoutes);
-app.use('/api/games/moderation', gameModRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/api-keys', apiKeyRoutes);
 app.use('/api/tasks', taskRoutes);
@@ -220,6 +231,10 @@ app.use('/api/system', systemRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/api/admin/2fa', admin2faRoutes);
 app.use('/api/tournaments', tournamentRoutes);
+app.use('/api/players', playerRoutes);
+app.use('/api/reports', reportRoutes);
+app.use('/api/social', socialRoutes);
+app.use('/api/chat', chatRoutes);
 
 // --- Production: Serving Frontend ---
 if (process.env.NODE_ENV === 'production') {

@@ -61,25 +61,33 @@ export default function GameModeration() {
       setLoading(true);
       const params = new URLSearchParams();
       params.append("page", page);
-      if (statusFilter) params.append("status", statusFilter);
-      if (severityFilter) params.append("severity", severityFilter);
+      if (statusFilter && statusFilter !== 'all') params.append("status", statusFilter);
+      if (severityFilter && severityFilter !== 'all') params.append("severity", severityFilter);
 
       const storedUser = localStorage.getItem('chess_admin_user');
       const token = storedUser ? JSON.parse(storedUser).token : null;
+
+      if (!token && process.env.NODE_ENV === 'production') {
+        throw new Error("No admin token found. Please log in again.");
+      }
 
       const headers = { 'Content-Type': 'application/json' };
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const response = await fetch(`/api/games/moderation?${params}`, {
+      const response = await fetch(`/api/game-moderation?${params}`, {
         headers
       });
-      if (!response.ok) throw new Error("Failed to fetch moderations");
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Server error: ${response.status}`);
+      }
 
       const data = await response.json();
-      setMods(data.mods);
-      setPagination(data.pagination);
+      setMods(data.mods || []);
+      setPagination(data.pagination || {});
     } catch (error) {
       console.error('Fetch error:', error);
       toast.error(error.message);
@@ -95,7 +103,7 @@ export default function GameModeration() {
       const headers = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const response = await fetch("/api/games/moderation/terminate", {
+      const response = await fetch("/api/game-moderation/terminate", {
         method: "POST",
         headers,
         body: JSON.stringify({ gameId, reason })
@@ -141,7 +149,7 @@ export default function GameModeration() {
       const headers = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const response = await fetch("/api/games/moderation/bulk-terminate", {
+      const response = await fetch("/api/game-moderation/bulk-terminate", {
         method: "POST",
         headers,
         body: JSON.stringify({ gameIds: selectedGames, reason })
@@ -168,7 +176,7 @@ export default function GameModeration() {
       const headers = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const response = await fetch("/api/games/moderation/bulk-ban", {
+      const response = await fetch("/api/game-moderation/bulk-ban", {
         method: "POST",
         headers,
         body: JSON.stringify({ gameIds: selectedGames, reason })
@@ -212,7 +220,7 @@ export default function GameModeration() {
     if (selectedGames.length === 0) return;
 
     try {
-      const response = await fetch("/api/games/export-pgn", {
+      const response = await fetch("/api/game-moderation/export-pgn", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ gameIds: selectedGames })

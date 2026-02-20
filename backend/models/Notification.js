@@ -5,6 +5,10 @@ const notificationSchema = mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Admin'
     },
+    playerId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Player'
+    },
     type: {
         type: String,
         enum: ['ALERT', 'INFO', 'WARNING', 'ERROR', 'SUCCESS'],

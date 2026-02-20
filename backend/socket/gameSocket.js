@@ -1,11 +1,33 @@
 import { Chess } from 'chess.js';
 import Game from '../models/Game.js';
+import Tournament from '../models/Tournament.js';
 
 // In-memory storage for active games and matchmaking queue
 const matches = new Map(); // gameId -> { chessInstance, whiteId, blackId, timeControl }
 const matchmakingQueue = []; // [{ userId, socketId, timeControl, elo }]
 
 export const handleGameSocket = (io, socket) => {
+    // Join a private room for DMs
+    const userId = socket.handshake.query.userId;
+    if (userId) {
+        socket.join(`user:${userId}`);
+        console.log(`[SOCKET] 👤 User ${userId} connected and joined private room`);
+    }
+
+    // --- Direct Messages ---
+    socket.on('send_dm', async ({ receiverId, message, senderId }) => {
+        const msg = {
+            sender: senderId,
+            receiver: receiverId,
+            message,
+            createdAt: new Date()
+        };
+        // Emit to receiver's private room
+        io.to(`user:${receiverId}`).emit('receive_dm', msg);
+        // Also emit back to sender (for multiple tabs/sync)
+        io.to(`user:${senderId}`).emit('receive_dm', msg);
+    });
+
     // --- Matchmaking ---
     socket.on('join_matchmaking', async ({ userId, username, timeControl, elo }) => {
         console.log(`[SOCKET] 🔍 User ${username || userId} joined matchmaking for ${timeControl}`);
@@ -143,9 +165,34 @@ export const handleGameSocket = (io, socket) => {
                     io.to(`game:${gameId}`).emit('game_over', { reason, winner });
                     matches.delete(gameId);
 
+                    const resultStr = reason === 'checkmate' ? (winner === 'white' ? '1-0' : '0-1') : '1/2-1/2';
+
                     Game.findByIdAndUpdate(gameId, {
                         status: 'finished',
-                        result: reason === 'checkmate' ? (winner === 'white' ? '1-0' : '0-1') : '1/2-1/2'
+                        result: resultStr
+                    }).then(async (game) => {
+                        // Propagate to tournament if applicable
+                        if (game && game.tournamentId) {
+                            const tournament = await Tournament.findById(game.tournamentId);
+                            if (tournament) {
+                                tournament.rounds.forEach(round => {
+                                    const m = round.pairings.find(p => p.gameId && p.gameId.toString() === gameId);
+                                    if (m) {
+                                        m.result = resultStr;
+                                        // Update points
+                                        const wIdx = tournament.enrolledPlayers.findIndex(p => p.player.toString() === m.white.toString());
+                                        const bIdx = tournament.enrolledPlayers.findIndex(p => p.player.toString() === m.black.toString());
+                                        if (resultStr === '1-0') tournament.enrolledPlayers[wIdx].points += 1;
+                                        else if (resultStr === '0-1') tournament.enrolledPlayers[bIdx].points += 1;
+                                        else if (resultStr === '1/2-1/2') {
+                                            if (wIdx > -1) tournament.enrolledPlayers[wIdx].points += 0.5;
+                                            if (bIdx > -1) tournament.enrolledPlayers[bIdx].points += 0.5;
+                                        }
+                                    }
+                                });
+                                await tournament.save();
+                            }
+                        }
                     }).catch(err => console.error('[SOCKET] Final DB Update Error:', err));
                 }
             } else {
@@ -195,12 +242,72 @@ export const handleGameSocket = (io, socket) => {
         const match = matches.get(gameId);
         if (match) {
             const winner = match.white === userId ? 'black' : 'white';
-            io.to(`game:${gameId}`).emit('game_over', { reason: 'resignation', winner });
+            const reason = 'resignation';
+            io.to(`game:${gameId}`).emit('game_over', { reason, winner });
             matches.delete(gameId);
+
+            const resultStr = winner === 'white' ? '1-0' : '0-1';
+
             Game.findByIdAndUpdate(gameId, {
                 status: 'finished',
-                result: match.white === userId ? '0-1' : '1-0'
+                result: resultStr
+            }).then(async (game) => {
+                if (game && game.tournamentId) {
+                    const tournament = await Tournament.findById(game.tournamentId);
+                    if (tournament) {
+                        tournament.rounds.forEach(round => {
+                            const m = round.pairings.find(p => p.gameId && p.gameId.toString() === gameId);
+                            if (m) {
+                                m.result = resultStr;
+                                const wIdx = tournament.enrolledPlayers.findIndex(p => p.player.toString() === m.white.toString());
+                                const bIdx = tournament.enrolledPlayers.findIndex(p => p.player.toString() === m.black.toString());
+                                if (resultStr === '1-0') tournament.enrolledPlayers[wIdx].points += 1;
+                                else if (resultStr === '0-1') tournament.enrolledPlayers[bIdx].points += 1;
+                            }
+                        });
+                        await tournament.save();
+                    }
+                }
             }).catch(err => console.error('[SOCKET] Resign Error:', err));
+        }
+    });
+
+    // --- Chat & Draw ---
+    socket.on('send_chat', async ({ gameId, sender, text }) => {
+        io.to(`game:${gameId}`).emit('chat_message', { sender, text, time: new Date() });
+        // Optional: Persist to DB
+        await Game.findByIdAndUpdate(gameId, {
+            $push: { messages: { sender, text } }
+        });
+    });
+
+    socket.on('offer_draw', ({ gameId, userId }) => {
+        const match = matches.get(gameId);
+        if (match) {
+            const color = match.white === userId ? 'white' : 'black';
+            match.drawOffer = color;
+            io.to(`game:${gameId}`).emit('draw_offered', { color });
+        }
+    });
+
+    socket.on('accept_draw', async ({ gameId, userId }) => {
+        const match = matches.get(gameId);
+        if (match && match.drawOffer) {
+            io.to(`game:${gameId}`).emit('game_over', { reason: 'agreement', winner: 'draw' });
+            matches.delete(gameId);
+
+            await Game.findByIdAndUpdate(gameId, {
+                status: 'finished',
+                result: '1/2-1/2'
+            });
+        }
+    });
+
+    socket.on('reject_draw', ({ gameId }) => {
+        const match = matches.get(gameId);
+        if (match) {
+            match.drawOffer = null;
+            io.to(`game:${gameId}`).emit('draw_rejected');
         }
     });
 };

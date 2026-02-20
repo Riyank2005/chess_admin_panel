@@ -1,6 +1,8 @@
 import Tournament from '../models/Tournament.js';
 import Player from '../models/Player.js';
+import Game from '../models/Game.js';
 import { createAuditEntry } from '../utils/auditLogger.js';
+import { createNotification } from './notificationController.js';
 
 // @desc    Get all tournaments
 // @route   GET /api/tournaments
@@ -190,8 +192,17 @@ export const registerPlayer = async (req, res) => {
             elo: player.elo
         });
         tournament.players = tournament.enrolledPlayers.length;
-
         const updatedTournament = await tournament.save();
+
+        // Send Notification to Player
+        await createNotification(
+            null, // No adminId
+            'SUCCESS',
+            'Enlisted in Arena',
+            `You have successfully registered for ${tournament.name}! Prepare for battle.`,
+            null, // actionUrl
+            playerId // The player to notify
+        );
 
         await createAuditEntry(req, 'TOURNAMENT_REGISTER', 'SYSTEM', `Registered player ${player.username} for tournament ${tournament.name}`);
 
@@ -238,3 +249,159 @@ export const unregisterPlayer = async (req, res) => {
         res.status(400).json({ message: error.message });
     }
 };
+
+// @desc    Start next round of tournament
+// @route   POST /api/tournaments/:id/start-round
+// @access  Private/Admin
+export const startRound = async (req, res) => {
+    try {
+        const tournament = await Tournament.findById(req.params.id);
+
+        if (!tournament) {
+            return res.status(404).json({ message: 'Tournament not found' });
+        }
+
+        if (tournament.status === 'registering') {
+            tournament.status = 'live';
+        }
+
+        if (tournament.status !== 'live') {
+            return res.status(400).json({ message: 'Tournament is not live' });
+        }
+
+        if (tournament.currentRound >= tournament.totalRounds) {
+            return res.status(400).json({ message: 'All rounds completed' });
+        }
+
+        const nextRoundNumber = tournament.currentRound + 1;
+
+        // Simple pairing logic: Sort by points and pair
+        const players = [...tournament.enrolledPlayers].filter(p => !p.isEliminated);
+        players.sort((a, b) => b.points - a.points);
+
+        const pairings = [];
+        for (let i = 0; i < players.length; i += 2) {
+            if (i + 1 < players.length) {
+                // Create a real Game record for the match
+                const game = await Game.create({
+                    white: players[i].player,
+                    black: players[i + 1].player,
+                    whiteElo: players[i].elo || 1200,
+                    blackElo: players[i + 1].elo || 1200,
+                    timeControl: tournament.timeControl,
+                    status: 'playing',
+                    tournamentId: tournament._id
+                });
+
+                pairings.push({
+                    white: players[i].player,
+                    black: players[i + 1].player,
+                    result: 'pending',
+                    gameId: game._id
+                });
+            } else {
+                // Odd number of players: One gets a bye (1 point)
+                const playerIndex = tournament.enrolledPlayers.findIndex(
+                    p => p.player.toString() === players[i].player.toString()
+                );
+                tournament.enrolledPlayers[playerIndex].points += 1;
+            }
+        }
+
+        tournament.rounds.push({
+            roundNumber: nextRoundNumber,
+            pairings
+        });
+        tournament.currentRound = nextRoundNumber;
+
+        const updatedTournament = await tournament.save();
+        await createAuditEntry(req, 'TOURNAMENT_START_ROUND', 'SYSTEM', `Started round ${nextRoundNumber} for ${tournament.name}`);
+
+        res.json(updatedTournament);
+    } catch (error) {
+        res.status(400).json({ message: error.message });
+    }
+};
+
+// @desc    Update a match result in a tournament
+// @route   PATCH /api/tournaments/:id/matches/:gameId
+// @access  Private/Admin
+export const updateMatchResult = async (req, res) => {
+    try {
+        const { result } = req.body;
+        const tournament = await Tournament.findById(req.params.id);
+
+        if (!tournament) {
+            return res.status(404).json({ message: 'Tournament not found' });
+        }
+
+        let matchFound = false;
+        tournament.rounds.forEach(round => {
+            const match = round.pairings.find(p => p.gameId && p.gameId.toString() === req.params.gameId);
+            if (match) {
+                match.result = result;
+                matchFound = true;
+
+                // Update points
+                const whiteIdx = tournament.enrolledPlayers.findIndex(p => p.player.toString() === match.white.toString());
+                const blackIdx = tournament.enrolledPlayers.findIndex(p => p.player.toString() === match.black.toString());
+
+                if (result === '1-0') {
+                    tournament.enrolledPlayers[whiteIdx].points += 1;
+                } else if (result === '0-1') {
+                    tournament.enrolledPlayers[blackIdx].points += 1;
+                } else if (result === '1/2-1/2') {
+                    tournament.enrolledPlayers[whiteIdx].points += 0.5;
+                    tournament.enrolledPlayers[blackIdx].points += 0.5;
+                }
+            }
+        });
+
+        if (!matchFound) {
+            return res.status(404).json({ message: 'Match not found in this tournament' });
+        }
+
+        const updatedTournament = await tournament.save();
+        res.json(updatedTournament);
+    } catch (error) {
+        res.status(400).json({ message: error.message });
+    }
+};
+
+// @desc    Complete tournament and distribute rewards
+// @route   POST /api/tournaments/:id/complete
+// @access  Private/Admin
+export const completeTournament = async (req, res) => {
+    try {
+        const tournament = await Tournament.findById(req.params.id);
+
+        if (!tournament) {
+            return res.status(404).json({ message: 'Tournament not found' });
+        }
+
+        tournament.status = 'completed';
+
+        // Find winner(s)
+        const standings = [...tournament.enrolledPlayers].sort((a, b) => b.points - a.points);
+        const winner = standings[0];
+
+        if (winner) {
+            await createNotification(
+                null,
+                'SUCCESS',
+                'Tournament Victory!',
+                `Congratulations! You won the ${tournament.name} and earned ${tournament.prize}.`,
+                null,
+                winner.player
+            );
+        }
+
+        const updatedTournament = await tournament.save();
+        await createAuditEntry(req, 'TOURNAMENT_COMPLETE', 'SYSTEM', `Completed tournament: ${tournament.name}`);
+
+        res.json(updatedTournament);
+    } catch (error) {
+        res.status(400).json({ message: error.message });
+    }
+};
+

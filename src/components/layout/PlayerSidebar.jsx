@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, Gamepad2, Trophy, Settings, ChevronLeft, ChevronRight, LogOut, User, X, Zap, Users } from "lucide-react";
+import { LayoutDashboard, Gamepad2, Trophy, Settings, ChevronLeft, ChevronRight, LogOut, User, X, Zap, Users, Scale } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -11,6 +11,7 @@ const menuItems = [
     { title: "Game Center", url: "/player/games", icon: Gamepad2, cat: "ARENA" },
     { title: "Tournaments", url: "/player/tournaments", icon: Trophy, cat: "ARENA" },
     { title: "Analytics", url: "/player/analytics", icon: Zap, cat: "STATS" },
+    { title: "Fair Play", url: "/player/fair-play", icon: Scale, cat: "SECURITY" },
     { sep: true },
     { title: "Profile", url: "/player/profile", icon: User, cat: "ACCOUNT" },
     { title: "Social Hub", url: "/player/social", icon: Users, cat: "SOCIAL" },

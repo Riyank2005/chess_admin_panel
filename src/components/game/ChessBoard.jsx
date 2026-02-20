@@ -30,13 +30,18 @@ const ChessBoard = ({
 
             const result = onMakeMove(move);
             if (result) {
-                // If onMakeMove returns true/valid move object, update local state
-                // Note: The parent component should usually handle state updates
-                // but we might need immediate feedback here
+                // Determine new FEN locally for immediate feedback
+                // result might be the move object or the chess instance
+                if (typeof result === 'object' && result.after) {
+                    setFen(result.after);
+                } else if (game) {
+                    setFen(game.fen());
+                }
                 return true;
             }
             return false;
         } catch (error) {
+            console.error("Move error:", error);
             return false;
         }
     }

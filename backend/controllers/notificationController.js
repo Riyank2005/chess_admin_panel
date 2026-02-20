@@ -3,7 +3,13 @@ import Notification from '../models/Notification.js';
 export const getNotifications = async (req, res) => {
     try {
         const { read, page = 1, limit = 20 } = req.query;
-        const query = { adminId: req.user._id };
+
+        // Determine if we are querying for Admin or Player
+        // Based on req.user structure (commonly admins have roles, players might not, or vice versa)
+        const query = req.user.role === 'admin'
+            ? { adminId: req.user._id }
+            : { playerId: req.user._id };
+
         if (read !== undefined) query.read = read === 'true';
 
         const skip = (page - 1) * limit;
@@ -45,10 +51,11 @@ export const deleteNotification = async (req, res) => {
     }
 };
 
-export const createNotification = async (adminId, type, title, message, actionUrl = null) => {
+export const createNotification = async (adminId, type, title, message, actionUrl = null, playerId = null) => {
     try {
         return await Notification.create({
             adminId,
+            playerId,
             type,
             title,
             message,
@@ -80,11 +87,19 @@ export const bulkDelete = async (req, res) => {
 };
 
 import Admin from '../models/Admin.js';
+import Player from '../models/Player.js';
 
 export const updatePreferences = async (req, res) => {
     try {
         const prefs = req.body;
-        const updated = await Admin.findByIdAndUpdate(req.user._id, { notificationPreferences: prefs }, { new: true });
+        let updated;
+
+        if (req.user.role === 'admin') {
+            updated = await Admin.findByIdAndUpdate(req.user._id, { notificationPreferences: prefs }, { new: true });
+        } else {
+            updated = await Player.findByIdAndUpdate(req.user._id, { notificationPreferences: prefs }, { new: true });
+        }
+
         res.json({ preferences: updated.notificationPreferences });
     } catch (error) {
         res.status(500).json({ message: error.message });

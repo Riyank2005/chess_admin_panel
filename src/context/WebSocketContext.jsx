@@ -28,7 +28,8 @@ export const WebSocketProvider = ({ children }) => {
             reconnection: true,
             reconnectionDelay: 1000,
             reconnectionDelayMax: 5000,
-            reconnectionAttempts: 10
+            reconnectionAttempts: 10,
+            query: user ? { userId: user._id || user.id } : {}
         });
 
         // Connection events

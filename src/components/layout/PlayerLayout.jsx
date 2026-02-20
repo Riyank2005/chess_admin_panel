@@ -9,6 +9,7 @@ import { BroadcastBanner } from "./BroadcastBanner";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { CommandMenu } from "./CommandMenu";
+import { PlayerNotifications } from "./PlayerNotifications";
 
 export function PlayerLayout() {
     const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -64,6 +65,7 @@ export function PlayerLayout() {
                             <div className="h-2 w-2 rounded-full animate-pulse bg-emerald-500 shadow-[0_0_10px_#10b981]"></div>
                             <span className="text-[10px] font-bold tracking-wider text-emerald-400 uppercase">Arena Online</span>
                         </div>
+                        <PlayerNotifications />
                         <ModeToggle />
                     </div>
                 </div>

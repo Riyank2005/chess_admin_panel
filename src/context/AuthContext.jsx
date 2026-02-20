@@ -176,6 +176,12 @@ export const AuthProvider = ({ children }) => {
         localStorage.removeItem("chess_admin_user");
     };
 
+    const updateUser = (userData) => {
+        const newUser = { ...user, ...userData };
+        setUser(newUser);
+        localStorage.setItem("chess_admin_user", JSON.stringify(newUser));
+    };
+
     return (
         <AuthContext.Provider value={{
             user,
@@ -184,6 +190,7 @@ export const AuthProvider = ({ children }) => {
             register,
             verifyOtp,
             resendOtp,
+            updateUser,
             loading,
             hasRegisteredUser
         }}>

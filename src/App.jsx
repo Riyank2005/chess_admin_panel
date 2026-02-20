@@ -42,6 +42,7 @@ import PlayerProfile from "./pages/PlayerProfile";
 import PlayerSocial from "./pages/PlayerSocial";
 import PlayerSettings from "./pages/PlayerSettings";
 import PlayerGameAnalysis from "./pages/PlayerGameAnalysis";
+import PlayerFairPlay from "./pages/PlayerFairPlay";
 import QuickPlay from "./pages/QuickPlay";
 
 const queryClient = new QueryClient({
@@ -116,6 +117,7 @@ const App = () => (
                     <Route path="social" element={<PlayerSocial />} />
                     <Route path="settings" element={<PlayerSettings />} />
                     <Route path="analysis" element={<PlayerGameAnalysis />} />
+                    <Route path="fair-play" element={<PlayerFairPlay />} />
                   </Route>
 
                   {/* Catch-all redirect */}

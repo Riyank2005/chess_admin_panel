@@ -6,7 +6,8 @@ import {
     reviewGame,
     terminateGame,
     bulkTerminateGames,
-    bulkBanPlayers
+    bulkBanPlayers,
+    exportGamesPGN
 } from '../controllers/gameModController.js';
 
 const router = express.Router();
@@ -17,5 +18,6 @@ router.post('/review', protect, admin, reviewGame);
 router.post('/terminate', protect, admin, terminateGame);
 router.post('/bulk-terminate', protect, admin, bulkTerminateGames);
 router.post('/bulk-ban', protect, admin, bulkBanPlayers);
+router.post('/export-pgn', protect, admin, exportGamesPGN);
 
 export default router;

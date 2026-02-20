@@ -75,7 +75,42 @@ const playerSchema = mongoose.Schema({
         type: Number,
         default: 0
     },
-    lastLogin: { type: Date }
+    lastLogin: { type: Date },
+    notificationPreferences: {
+        email: { type: Boolean, default: true },
+        sms: { type: Boolean, default: false },
+        push: { type: Boolean, default: true },
+        critical: { type: Boolean, default: true },
+        warning: { type: Boolean, default: true },
+        info: { type: Boolean, default: false }
+    },
+    avatar: {
+        type: String,
+        default: ""
+    },
+    privacySettings: {
+        showEmail: { type: Boolean, default: false },
+        showOnlineStatus: { type: Boolean, default: true },
+        showGameHistory: { type: Boolean, default: true }
+    },
+    settings: {
+        theme: { type: String, default: 'dark' },
+        boardStyle: { type: String, default: 'classic' },
+        sounds: { type: Boolean, default: true },
+        timeControl: { type: String, default: '10+5' }
+    },
+    twoFactorAuth: {
+        enabled: { type: Boolean, default: false },
+        secret: { type: String }
+    },
+    friends: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Player'
+    }],
+    blockedUsers: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Player'
+    }]
 }, {
     timestamps: true
 });

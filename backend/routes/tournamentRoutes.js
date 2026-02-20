@@ -6,7 +6,10 @@ import {
     updateTournamentStatus,
     deleteTournament,
     registerPlayer,
-    unregisterPlayer
+    unregisterPlayer,
+    startRound,
+    updateMatchResult,
+    completeTournament
 } from '../controllers/tournamentController.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
 
@@ -28,5 +31,14 @@ router.route('/:id/register')
 
 router.route('/:id/register/:playerId')
     .delete(protect, admin, unregisterPlayer);
+
+router.route('/:id/start-round')
+    .post(protect, admin, startRound);
+
+router.route('/:id/matches/:gameId')
+    .patch(protect, admin, updateMatchResult);
+
+router.route('/:id/complete')
+    .post(protect, admin, completeTournament);
 
 export default router;

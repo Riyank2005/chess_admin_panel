@@ -7,34 +7,43 @@ export const getGameModerations = async (req, res) => {
         console.log('[MODERATION] 🔍 Fetching game moderations:', req.query);
         const { status, severity, page = 1, limit = 50 } = req.query;
         const query = {};
-        if (status && status !== 'all') query.status = status;
-        if (severity && severity !== 'all') query.severity = severity;
 
-        const skip = (page - 1) * limit;
+        // Ensure we only query valid status/severity if they aren't 'all'
+        if (status && status !== 'all' && status !== 'undefined') query.status = status;
+        if (severity && severity !== 'all' && severity !== 'undefined') query.severity = severity;
+
+        console.log('[MODERATION] 🔍 Query:', query);
+
+        const skip = (Math.max(1, parseInt(page)) - 1) * parseInt(limit);
         const [mods, total] = await Promise.all([
             GameMod.find(query)
                 .sort({ createdAt: -1 })
                 .skip(skip)
                 .limit(parseInt(limit))
-                .select('gameId whitePlayer blackPlayer reason severity status reportedBy notes createdAt updatedAt'),
+                .lean(), // Use lean() for better performance and plain objects
             GameMod.countDocuments(query)
         ]);
 
         res.json({
-            mods: mods.map(mod => ({
+            mods: (mods || []).map(mod => ({
                 _id: mod._id,
                 gameId: mod.gameId,
-                whitePlayer: mod.whitePlayer,
-                blackPlayer: mod.blackPlayer,
-                reason: mod.reason,
-                severity: mod.severity,
-                status: mod.status,
-                reportedBy: mod.reportedBy,
-                notes: mod.notes,
+                whitePlayer: mod.whitePlayer || 'Unknown',
+                blackPlayer: mod.blackPlayer || 'Unknown',
+                reason: mod.reason || 'OTHER',
+                severity: mod.severity || 'MEDIUM',
+                status: mod.status || 'FLAGGED',
+                reportedBy: mod.reportedBy || 'SYSTEM',
+                notes: mod.notes || '',
                 createdAt: mod.createdAt,
                 updatedAt: mod.updatedAt
             })),
-            pagination: { page, limit, total, pages: Math.ceil(total / limit) }
+            pagination: {
+                page: parseInt(page),
+                limit: parseInt(limit),
+                total,
+                pages: Math.ceil(total / parseInt(limit)) || 1
+            }
         });
     } catch (error) {
         console.error('[MODERATION] ❌ Error fetching game mods:', error);
@@ -165,3 +174,23 @@ export const bulkBanPlayers = async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 };
+
+export const exportGamesPGN = async (req, res) => {
+    try {
+        const { gameIds } = req.body;
+        const games = await Game.find({ _id: { $in: gameIds } });
+
+        let pgnContent = '';
+        games.forEach(game => {
+            if (game.pgn) {
+                pgnContent += game.pgn + '\n\n';
+            }
+        });
+
+        res.setHeader('Content-Type', 'text/plain');
+        res.send(pgnContent);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+

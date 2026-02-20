@@ -42,6 +42,19 @@ const gameSchema = mongoose.Schema({
     },
     pgn: {
         type: String
+    },
+    messages: [{
+        sender: { type: String, required: true }, // username or 'system'
+        text: { type: String, required: true },
+        time: { type: Date, default: Date.now }
+    }],
+    drawOffer: {
+        type: String, // 'white', 'black', or null
+        default: null
+    },
+    tournamentId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Tournament'
     }
 }, {
     timestamps: true

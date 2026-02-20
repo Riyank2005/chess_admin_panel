@@ -24,6 +24,21 @@ export const getGames = async (req, res) => {
         // Build query
         const query = {};
 
+        // Security: If not admin, restrict to own games
+        const isAdmin = req.user && (req.user.role === 'admin' || req.user.clearanceLevel);
+        if (!isAdmin) {
+            query.$or = [
+                { white: req.user._id },
+                { black: req.user._id }
+            ];
+        } else if (req.query.participant) {
+            // Admin filtering by participant
+            query.$or = [
+                { white: req.query.participant },
+                { black: req.query.participant }
+            ];
+        }
+
         // Search filter
         if (search) {
             query.$or = [
@@ -37,13 +52,7 @@ export const getGames = async (req, res) => {
             query.status = status;
         }
 
-        // Player filters
-        if (req.query.participant) {
-            query.$or = [
-                { white: req.query.participant },
-                { black: req.query.participant }
-            ];
-        }
+
 
         if (white) {
             query.white = white;
@@ -138,6 +147,31 @@ export const updateGameStatus = async (req, res) => {
         }
     } catch (error) {
         res.status(400).json({ message: error.message });
+    }
+};
+
+// @desc    Get game by ID
+export const getGameById = async (req, res) => {
+    try {
+        const game = await Game.findById(req.params.id)
+            .populate('white', 'username elo')
+            .populate('black', 'username elo');
+
+        if (game) {
+            // Security check: Players can only view their own games (or public ones if we decide so, but usually safe to restrict)
+            const isAdmin = req.user && (req.user.role === 'admin' || req.user.clearanceLevel);
+            const isParticipant = game.white._id.equals(req.user._id) || game.black._id.equals(req.user._id);
+
+            if (isAdmin || isParticipant) {
+                res.json(game);
+            } else {
+                res.status(403).json({ message: 'Not authorized to view this game' });
+            }
+        } else {
+            res.status(404).json({ message: 'Game not found' });
+        }
+    } catch (error) {
+        res.status(500).json({ message: error.message });
     }
 };
 
